@@ -1,0 +1,1136 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>立体几何交互教学 - 正四棱锥</title>
+    <style>
+        :root {
+            --primary: #0ea5e9;
+            --primary-dark: #0284c7;
+            --accent: #d946ef;
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --surface-soft: #f1f5f9;
+            --text: #0f172a;
+            --muted: #475569;
+            --border: #e2e8f0;
+            --ring: rgba(14, 165, 233, 0.24);
+            --shadow-soft: 0 18px 45px rgba(15, 23, 42, 0.08);
+            --panel-shadow: 0 18px 42px rgba(15, 23, 42, 0.09);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #edf3f8;
+            color: var(--text);
+            display: flex;
+            gap: 10px;
+            height: 100vh;
+            padding: 10px;
+        }
+
+        button {
+            font: inherit;
+        }
+
+        .skip-link {
+            position: fixed;
+            left: 16px;
+            top: 16px;
+            z-index: 999;
+            padding: 10px 14px;
+            border-radius: 8px;
+            background: var(--text);
+            color: white;
+            text-decoration: none;
+            transform: translateY(-140%);
+            transition: transform 0.2s ease;
+        }
+
+        .skip-link:focus {
+            transform: translateY(0);
+            outline: 3px solid var(--ring);
+        }
+
+        /* 布局 */
+        #sidebar {
+            width: 420px;
+            background: var(--surface);
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            border-radius: 24px;
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+            overflow: hidden;
+            box-shadow: var(--panel-shadow);
+        }
+
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            background: #f8fafc;
+            min-width: 0;
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: var(--panel-shadow);
+        }
+
+        /* 内容区域 */
+        .content-wrapper {
+            flex: 1;
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr);
+            grid-template-columns: minmax(0, 1fr);
+            gap: 12px;
+            min-height: 0;
+            min-width: 0;
+            overflow: hidden;
+            padding: 16px;
+        }
+
+        .lesson-header {
+            display: grid;
+            gap: 12px;
+        }
+
+        .content-card {
+            min-width: 0;
+            padding: 14px;
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            border-radius: 14px;
+            background: #ffffff;
+            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+        }
+
+        .problem-card {
+            display: grid;
+            gap: 10px;
+        }
+
+        .lesson-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--primary-dark);
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .lesson-meta::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: var(--primary);
+            box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.12);
+        }
+
+        h1 {
+            font-size: 21px;
+            font-weight: 700;
+            margin: 0;
+            color: var(--text);
+            line-height: 1.4;
+        }
+
+        .answer-card {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 14px;
+            align-items: center;
+            border: 1px solid #bae6fd;
+            background: #f8fbff;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .answer-card span {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .answer-card strong {
+            display: block;
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1.45;
+        }
+
+        .answer-value {
+            min-width: 96px;
+            padding: 9px 12px;
+            border-radius: 10px;
+            background: var(--text);
+            color: white;
+            text-align: center;
+            font-size: 20px;
+            font-weight: 800;
+            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.18);
+        }
+
+        .btn:focus-visible {
+            outline: 3px solid var(--ring);
+            outline-offset: 2px;
+        }
+
+        .step-badge {
+            justify-self: start;
+            display: inline-block;
+            background: var(--primary-dark);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 99px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 0;
+        }
+
+        .solution-card {
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr);
+            grid-template-columns: minmax(0, 1fr);
+            gap: 12px;
+            min-height: 0;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        #step-container {
+            min-height: 0;
+            min-width: 0;
+            overflow: auto;
+            padding-right: 6px;
+            scroll-margin-top: 16px;
+            scrollbar-gutter: stable;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(14, 165, 233, 0.7) rgba(226, 232, 240, 0.75);
+            -webkit-overflow-scrolling: touch;
+            opacity: 1;
+            transform: translateY(0);
+            transition: opacity 0.28s ease, transform 0.28s ease;
+        }
+
+        #step-container::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        #step-container::-webkit-scrollbar-track {
+            background: rgba(226, 232, 240, 0.72);
+            border-radius: 999px;
+        }
+
+        #step-container::-webkit-scrollbar-thumb {
+            min-height: 36px;
+            border: 2px solid rgba(226, 232, 240, 0.72);
+            border-radius: 999px;
+            background: linear-gradient(180deg, rgba(14, 165, 233, 0.86), rgba(2, 132, 199, 0.86));
+        }
+
+        #step-container::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, rgba(2, 132, 199, 0.95), rgba(3, 105, 161, 0.95));
+        }
+
+        #step-container::-webkit-scrollbar-corner {
+            background: transparent;
+        }
+
+        #step-container.is-changing {
+            opacity: 0;
+            transform: translateY(6px);
+        }
+
+        .step-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--primary-dark);
+        }
+
+        .step-content {
+            font-size: 15px;
+            line-height: 1.8;
+            color: var(--secondary, #334155);
+        }
+
+        .step-content mjx-container[display="true"] {
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            overscroll-behavior-x: contain;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* 公式溢出时：常驻显示横向滚动条 + 支持鼠标按住拖拽滑动 */
+        .step-content mjx-container[display="true"].is-scrollable {
+            overflow-x: scroll;
+            padding-bottom: 10px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(14, 165, 233, 0.85) rgba(226, 232, 240, 0.9);
+            cursor: grab;
+            touch-action: pan-x;
+        }
+
+        .step-content mjx-container[display="true"].is-scrollable.is-dragging {
+            cursor: grabbing;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .step-content mjx-container[display="true"].is-scrollable::-webkit-scrollbar {
+            -webkit-appearance: none;
+            height: 9px;
+        }
+
+        .step-content mjx-container[display="true"].is-scrollable::-webkit-scrollbar-track {
+            background: rgba(226, 232, 240, 0.9);
+            border-radius: 999px;
+        }
+
+        .step-content mjx-container[display="true"].is-scrollable::-webkit-scrollbar-thumb {
+            border-radius: 999px;
+            background: linear-gradient(90deg, rgba(14, 165, 233, 0.95), rgba(2, 132, 199, 0.95));
+        }
+
+        .step-content mjx-container[display="true"].is-scrollable::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(90deg, rgba(2, 132, 199, 1), rgba(3, 105, 161, 1));
+        }
+
+        /* 行内公式过宽时允许整段横向滚动，避免溢出卡片 */
+        .step-content p,
+        .step-content li {
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(14, 165, 233, 0.6) transparent;
+        }
+
+        .step-content p::-webkit-scrollbar,
+        .step-content li::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .step-content p::-webkit-scrollbar-thumb,
+        .step-content li::-webkit-scrollbar-thumb {
+            border-radius: 999px;
+            background: rgba(14, 165, 233, 0.6);
+        }
+
+        .math-term {
+            background: var(--surface-soft);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: var(--primary-dark);
+            font-weight: 500;
+            font-size: 0.9em;
+        }
+
+        /* 底部导航 */
+        .nav-bar {
+            padding: 16px 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(14px);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+            border: none;
+            font-size: 14px;
+        }
+
+        .btn-prev {
+            background: #f1f5f9;
+            color: #64748b;
+        }
+
+        .btn-prev:hover {
+            background: #e2e8f0;
+            color: #475569;
+        }
+
+        .btn-next {
+            background: var(--primary-dark);
+            color: white;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
+        }
+
+        .btn-next:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(14, 165, 233, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* 3D 标签 */
+        .label {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text);
+            text-shadow: -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff;
+            pointer-events: none;
+            user-select: none;
+            font-family: sans-serif;
+        }
+
+        /* 提示气泡 */
+        .tip-bubble {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 12px 16px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            font-size: 13px;
+            color: #64748b;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column-reverse;
+                gap: 8px;
+                padding: 8px;
+            }
+            #sidebar {
+                width: 100%;
+                flex: 0 0 52vh;
+                border-radius: 20px;
+                box-shadow: var(--panel-shadow);
+            }
+            #canvas-container {
+                flex: 1 1 auto;
+                height: auto;
+                border-radius: 20px;
+            }
+            .content-wrapper {
+                gap: 10px;
+                padding: 10px;
+            }
+            .lesson-header { gap: 10px; }
+            .content-card {
+                padding: 12px;
+                border-radius: 12px;
+            }
+            .lesson-meta { font-size: 11px; }
+            h1 { font-size: 16px; line-height: 1.32; }
+            .answer-card {
+                grid-template-columns: 1fr auto;
+                gap: 10px;
+            }
+            .answer-card span { font-size: 11px; }
+            .answer-card strong { font-size: 12px; }
+            .answer-value {
+                width: fit-content;
+                min-width: 74px;
+                padding: 7px 9px;
+                font-size: 16px;
+            }
+            .solution-card { gap: 10px; }
+            .step-title {
+                margin-bottom: 10px;
+                font-size: 16px;
+            }
+            .step-content {
+                font-size: 14px;
+                line-height: 1.65;
+            }
+            .nav-bar {
+                padding: 10px 14px;
+            }
+            .tip-bubble {
+                top: 14px;
+                right: 14px;
+                max-width: calc(100% - 28px);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                scroll-behavior: auto !important;
+                transition-duration: 0.01ms !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+            }
+        }
+    </style>
+
+    <!-- Import Maps -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <!-- MathJax -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$','$$']],
+                processEscapes: true,
+                processEnvironments: true
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+            },
+            startup: {
+                pageReady: () => {
+                    return MathJax.startup.defaultPageReady().then(() => {
+                        console.log('MathJax initial rendering complete');
+                    });
+                }
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+    <a class="skip-link" id="skip-link" href="#step-container">跳到解题步骤</a>
+
+    <!-- 左侧控制面板 -->
+    <aside id="sidebar" aria-label="立体几何解题步骤面板">
+        <div class="content-wrapper">
+            <header class="lesson-header">
+                <section class="problem-card content-card" aria-labelledby="lesson-title">
+                    <div class="lesson-meta" id="lesson-meta">交互解题 · 线面角</div>
+                    <h1 id="lesson-title">正四棱锥P-ABCD中，底面边长为2，高为1，E为PC中点，求直线BE与平面PAC所成角的正弦值</h1>
+                </section>
+                <section class="answer-card content-card" id="answer-card" aria-label="最终答案">
+                    <div>
+                        <span id="answer-title">最终答案</span>
+                        <strong id="answer-summary">直线 BE 与平面 PAC 所成角的正弦值</strong>
+                    </div>
+                    <div class="answer-value" id="answer-value">$\\frac{2\\sqrt{22}}{11}$</div>
+                </section>
+            </header>
+            <section class="solution-card content-card" id="solution-card" aria-label="解题步骤">
+                <div id="step-indicator" class="step-badge">步骤 1 / 4</div>
+                <div id="step-container" role="region" aria-live="polite" tabindex="-1">
+                    <!-- 动态内容 -->
+                </div>
+            </section>
+        </div>
+        <div class="nav-bar">
+            <button id="prev-btn" class="btn btn-prev" type="button" aria-controls="step-container" disabled>上一步</button>
+            <button id="next-btn" class="btn btn-next" type="button" aria-controls="step-container">下一步</button>
+        </div>
+    </aside>
+
+    <!-- 右侧 3D 画布 -->
+    <div id="canvas-container" role="img" aria-label="正四棱锥与相关直线、平面、向量的三维交互演示">
+        <div class="tip-bubble">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+            </svg>
+            <span id="interaction-tip">左键旋转 · 滚轮缩放 · 右键平移</span>
+        </div>
+    </div>
+
+    <!-- 逻辑脚本 -->
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        const lesson = {
+            language: "zh-CN",
+            meta: "交互解题 · 线面角",
+            title: "正四棱锥P-ABCD中，底面边长为2，高为1，E为PC中点，求直线BE与平面PAC所成角的正弦值",
+            answerLabel: "直线 BE 与平面 PAC 所成角的正弦值",
+            answerValue: "$\\frac{2\\sqrt{22}}{11}$",
+            ui: {
+                pageTitle: "立体几何交互教学 - 正四棱锥",
+                skipToSteps: "跳到解题步骤",
+                sidebarLabel: "立体几何解题步骤面板",
+                answerCardLabel: "最终答案",
+                answerTitle: "最终答案",
+                solutionCardLabel: "解题步骤",
+                sceneLabel: "正四棱锥与相关直线、平面、向量的三维交互演示",
+                interactionTip: "左键旋转 · 滚轮缩放 · 右键平移",
+                previous: "上一步",
+                next: "下一步",
+                finish: "完成",
+                stepTemplate: "步骤 {current} / {total}",
+                finishAria: "完成解题",
+                nextAriaTemplate: "进入步骤 {step}",
+                previousAriaTemplate: "返回步骤 {step}",
+                firstStepAria: "已经是第一步"
+            }
+        };
+
+        const defaultUI = {
+            pageTitle: lesson.title,
+            skipToSteps: "跳到解题步骤",
+            sidebarLabel: "立体几何解题步骤面板",
+            answerCardLabel: "最终答案",
+            answerTitle: "最终答案",
+            solutionCardLabel: "解题步骤",
+            sceneLabel: "立体几何三维交互演示",
+            interactionTip: "左键旋转 · 滚轮缩放 · 右键平移",
+            previous: "上一步",
+            next: "下一步",
+            finish: "完成",
+            stepTemplate: "步骤 {current} / {total}",
+            finishAria: "完成解题",
+            nextAriaTemplate: "进入步骤 {step}",
+            previousAriaTemplate: "返回步骤 {step}",
+            firstStepAria: "已经是第一步"
+        };
+        const ui = { ...defaultUI, ...(lesson.ui || {}) };
+
+        // 步骤数据
+        const steps = [
+            {
+                title: "建立空间直角坐标系",
+                content: `
+                    <p>首先，我们需要建立一个合适的空间直角坐标系来量化几何元素。</p>
+                    <p>取底面正方形 $ABCD$ 的中心 $O$ 为原点 $(0,0,0)$。</p>
+                    <p>让底面对角线 $AC$ 在 $x$ 轴，$BD$ 在 $y$ 轴，顶点 $P$ 在 $z$ 轴上。</p>
+                    <p>因为底面边长为 $2$，所以两条对角线长为 $2\\sqrt{2}$，半对角线长为 $\\sqrt{2}$。于是关键点坐标为：</p>
+                    $$A(\\sqrt{2}, 0, 0), C(-\\sqrt{2}, 0, 0)$$
+                    $$B(0, \\sqrt{2}, 0), D(0, -\\sqrt{2}, 0)$$
+                    $$P(0, 0, 1)$$
+                    <p>这样 $AC \\perp BD$ 关系更明显。</p>
+                `,
+                highlight: ['Pyramid', 'Axis'],
+                cameraPos: { x: 5, y: 4, z: 5 }
+            },
+            {
+                title: "计算中点 E 与向量 BE",
+                content: `
+                    <p>已知 $E$ 是侧棱 $PC$ 的中点。</p>
+                    <p>利用中点坐标公式：$E = \\frac{P + C}{2}$</p>
+                    $$P(0, 0, 1), C(-\\sqrt{2}, 0, 0)$$
+                    $$E = (-\\frac{\\sqrt{2}}{2}, 0, \\frac{1}{2})$$
+                    <p>接下来计算直线 $BE$ 的方向向量 $\\vec{BE}$：</p>
+                    $$\\vec{BE} = E - B = (-\\frac{\\sqrt{2}}{2}, -\\sqrt{2}, \\frac{1}{2})$$
+                    <p>为了计算方便，也可以取一个共线的方向向量 $\\vec{u} = 2\\vec{BE} = (-\\sqrt{2}, -2\\sqrt{2}, 1)$。</p>
+                `,
+                highlight: ['Point_E', 'Line_BE', 'Pyramid'],
+                cameraPos: { x: 3, y: 3, z: 6 }
+            },
+            {
+                title: "确定平面 PAC 的法向量",
+                content: `
+                    <p>我们需要求直线 $BE$ 与平面 $PAC$ 的夹角。</p>
+                    <p>观察几何体特征：</p>
+                    <ul>
+                        <li>底面 $ABCD$ 是正方形，对角线互相垂直，即 $AC \\perp BD$。</li>
+                        <li>顶点 $P$ 在底面的投影是中心 $O$，所以 $PO \\perp AC$。</li>
+                    </ul>
+                    <p>因为 $AC \\perp BD$ 且 $AC \\perp PO$，且 $BD \\cap PO = O$，</p>
+                    <p>所以 <span class="math-term">直线 AC $\\perp$ 平面 PBD</span>。</p>
+                    <p>同理，由于 $BD \\perp AC$ 且 $BD \\perp PO$（因为 $PO \\perp$ 底面），所以 <span class="math-term">直线 BD $\\perp$ 平面 PAC</span>。</p>
+                    <p>因此，平面 $PAC$ 的法向量 $\\vec{n}$ 就是 $\\vec{BD}$ 的方向。</p>
+                    $$\\vec{n} = \\vec{BD} = (0, -2\\sqrt{2}, 0)$$
+                    <p>简化取 $\\vec{n} = (0, 1, 0)$。</p>
+                `,
+                highlight: ['Plane_PAC', 'Line_BD', 'Normal_Vector'],
+                cameraPos: { x: 4, y: 5, z: 2 }
+            },
+            {
+                title: "利用向量公式求解",
+                content: `
+                    <p>设直线 $BE$ 与平面 $PAC$ 所成角为 $\\theta$。</p>
+                    <p>根据线面角公式：$\\sin\\theta = |\\cos\\langle \\vec{BE}, \\vec{n} \\rangle|$</p>
+                    <p>向量数据：</p>
+                    <ul>
+                        <li>$\\vec{BE} = (-\\frac{\\sqrt{2}}{2}, -\\sqrt{2}, \\frac{1}{2})$</li>
+                        <li>$\\vec{n} = (0, 1, 0)$</li>
+                    </ul>
+                    <p>计算数量积：</p>
+                    $$\\vec{BE} \\cdot \\vec{n} = -\\sqrt{2}$$
+                    <p>计算模长：</p>
+                    $$|\\vec{BE}| = \\sqrt{(-\\frac{\\sqrt{2}}{2})^2 + (-\\sqrt{2})^2 + (\\frac{1}{2})^2} = \\sqrt{\\frac{2}{4} + 2 + \\frac{1}{4}} = \\sqrt{\\frac{11}{4}} = \\frac{\\sqrt{11}}{2}$$
+                    $$|\\vec{n}| = 1$$
+                    <p>代入公式：</p>
+                    $$\\sin\\theta = \\frac{|-\\sqrt{2}|}{\\frac{\\sqrt{11}}{2} \\times 1} = \\frac{2\\sqrt{2}}{\\sqrt{11}} = \\frac{2\\sqrt{22}}{11}$$
+                    <p>所以，直线 $BE$ 与平面 $PAC$ 所成角的正弦值为 $\\frac{2\\sqrt{22}}{11}$。</p>
+                `,
+                highlight: ['Line_BE', 'Plane_PAC', 'Normal_Vector'],
+                cameraPos: { x: 4, y: 4.5, z: 4 }
+            }
+        ];
+
+        // Three.js 变量
+        let scene, camera, renderer, labelRenderer, controls;
+        let currentStep = 0;
+        const objects = {}; // 存储所有3D对象以便管理
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const cameraTargetPoint = new THREE.Vector3(0, 0.45, 0);
+        let targetCameraPosition = null;
+
+        function initializeLessonText() {
+            document.documentElement.lang = lesson.language || 'zh-CN';
+            document.title = ui.pageTitle || lesson.title;
+            document.getElementById('skip-link').textContent = ui.skipToSteps;
+            document.getElementById('sidebar').setAttribute('aria-label', ui.sidebarLabel);
+            document.getElementById('answer-card').setAttribute('aria-label', ui.answerCardLabel);
+            document.getElementById('answer-title').textContent = ui.answerTitle;
+            document.getElementById('solution-card').setAttribute('aria-label', ui.solutionCardLabel);
+            document.getElementById('canvas-container').setAttribute('aria-label', ui.sceneLabel);
+            document.getElementById('interaction-tip').textContent = ui.interactionTip;
+            document.getElementById('prev-btn').textContent = ui.previous;
+            document.getElementById('lesson-meta').textContent = lesson.meta;
+            document.getElementById('lesson-title').textContent = lesson.title;
+            document.getElementById('answer-summary').textContent = lesson.answerLabel;
+            document.getElementById('answer-value').textContent = lesson.answerValue;
+        }
+
+        function markScrollableMath(root) {
+            const blocks = root.querySelectorAll('.step-content mjx-container[display="true"]');
+            blocks.forEach((el) => {
+                // 公式实际宽度超出可视宽度时，强制常驻显示横向滚动条
+                const overflowing = el.scrollWidth - el.clientWidth > 1;
+                el.classList.toggle('is-scrollable', overflowing);
+            });
+        }
+
+        function typesetMath(container) {
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                window.MathJax.typesetPromise([container])
+                    .then(() => markScrollableMath(container))
+                    .catch((err) => console.log(err));
+            }
+        }
+
+        // 鼠标按住拖拽即可横向滑动溢出的公式（不依赖系统滚动条）
+        function enableDragScroll(scope) {
+            let dragEl = null;
+            let startX = 0;
+            let startScroll = 0;
+            let pointerId = null;
+            let moved = false;
+
+            function findScrollable(target) {
+                let el = target;
+                while (el && el !== scope) {
+                    if (el.scrollWidth - el.clientWidth > 1) {
+                        const ox = getComputedStyle(el).overflowX;
+                        if (ox === 'auto' || ox === 'scroll') return el;
+                    }
+                    el = el.parentElement;
+                }
+                return null;
+            }
+
+            scope.addEventListener('pointerdown', (e) => {
+                if (e.pointerType === 'touch') return; // 触屏用原生滑动
+                const el = findScrollable(e.target);
+                if (!el) return;
+                dragEl = el;
+                startX = e.clientX;
+                startScroll = el.scrollLeft;
+                pointerId = e.pointerId;
+                moved = false;
+                el.classList.add('is-dragging');
+                try { el.setPointerCapture(pointerId); } catch (_) {}
+            });
+
+            scope.addEventListener('pointermove', (e) => {
+                if (!dragEl) return;
+                const dx = e.clientX - startX;
+                if (Math.abs(dx) > 2) moved = true;
+                dragEl.scrollLeft = startScroll - dx;
+                e.preventDefault();
+            });
+
+            function end() {
+                if (!dragEl) return;
+                try { dragEl.releasePointerCapture(pointerId); } catch (_) {}
+                dragEl.classList.remove('is-dragging');
+                dragEl = null;
+                pointerId = null;
+            }
+
+            scope.addEventListener('pointerup', end);
+            scope.addEventListener('pointercancel', end);
+            scope.addEventListener('lostpointercapture', end);
+            // 拖拽过程中阻止误触发的点击
+            scope.addEventListener('click', (e) => {
+                if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; }
+            }, true);
+        }
+
+        function goToStep(index) {
+            currentStep = Math.max(0, Math.min(index, steps.length - 1));
+            updateUI();
+        }
+
+        // 初始化场景
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            // 1. 场景
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf8fafc);
+            scene.fog = new THREE.Fog(0xf8fafc, 10, 50);
+
+            // 2. 相机
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+            camera.position.set(5, 4, 5);
+
+            // 3. 渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            labelRenderer = new CSS2DRenderer();
+            labelRenderer.setSize(container.clientWidth, container.clientHeight);
+            labelRenderer.domElement.style.position = 'absolute';
+            labelRenderer.domElement.style.top = '0px';
+            labelRenderer.domElement.style.pointerEvents = 'none';
+            container.appendChild(labelRenderer.domElement);
+
+            // 4. 控制器
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = !prefersReducedMotion;
+            controls.dampingFactor = 0.05;
+
+            // 5. 灯光
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(5, 10, 7);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            // 6. 辅助网格
+            const gridHelper = new THREE.GridHelper(20, 20, 0xcbd5e1, 0xe2e8f0);
+            scene.add(gridHelper);
+
+            // 7. 构建几何模型
+            buildModel();
+
+            // 8. 监听调整大小
+            window.addEventListener('resize', onWindowResize);
+
+            // 9. 初始化UI
+            initializeLessonText();
+            enableDragScroll(document.getElementById('step-container'));
+            updateUI();
+            
+            // 10. 开始动画
+            animate();
+        }
+
+        function buildModel() {
+            // 坐标定义 (放大一点以便观察)
+            // 原始坐标: A(sqrt(2), 0, 0), B(0, sqrt(2), 0)...
+            // 为了对应 Three.js 的 Y 轴向上，我们映射: Math(x, y, z) -> Three(x, z, -y) 或者简单地 Math Z -> Three Y
+            // 这里我们采用: Math z轴对应 Three y轴 (高度)
+            
+            const scale = 1.5;
+            const h = 1 * scale; 
+            const d = Math.sqrt(2) * scale; // 半对角线长度
+
+            const points = {
+                O: new THREE.Vector3(0, 0, 0),
+                P: new THREE.Vector3(0, h, 0),
+                A: new THREE.Vector3(d, 0, 0),
+                B: new THREE.Vector3(0, 0, d),
+                C: new THREE.Vector3(-d, 0, 0),
+                D: new THREE.Vector3(0, 0, -d),
+            };
+
+            // 计算 E 点 (P和C的中点)
+            points.E = new THREE.Vector3().addVectors(points.P, points.C).multiplyScalar(0.5);
+
+            // --- 创建点和标签 ---
+            for (const [name, pos] of Object.entries(points)) {
+                // 球体
+                const geometry = new THREE.SphereGeometry(0.06, 16, 16);
+                const material = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+                const sphere = new THREE.Mesh(geometry, material);
+                sphere.position.copy(pos);
+                scene.add(sphere);
+                objects[`Point_${name}`] = sphere;
+
+                // 标签
+                const div = document.createElement('div');
+                div.className = 'label';
+                div.textContent = name;
+                div.style.marginTop = '-1em';
+                const label = new CSS2DObject(div);
+                label.position.set(0, 0.15, 0);
+                sphere.add(label);
+            }
+
+            // --- 创建线段 ---
+            function createTubeSegment(p1, p2, radius, material) {
+                const direction = new THREE.Vector3().subVectors(p2, p1);
+                const length = direction.length();
+                const geometry = new THREE.CylinderGeometry(radius, radius, length, 14);
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.copy(new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5));
+                mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+                return mesh;
+            }
+
+            function createLine(p1, p2, color = 0x64748b, dashed = false) {
+                const isAccent = color === 0xd946ef || color === 0xef4444 || color === 0x0ea5e9;
+                const material = new THREE.MeshBasicMaterial({ color });
+
+                if (dashed) {
+                    const group = new THREE.Group();
+                    const direction = new THREE.Vector3().subVectors(p2, p1);
+                    const length = direction.length();
+                    const unit = direction.clone().normalize();
+                    const dashSize = 0.22;
+                    const gapSize = 0.13;
+                    const radius = 0.0055;
+
+                    for (let start = 0; start < length; start += dashSize + gapSize) {
+                        const end = Math.min(start + dashSize, length);
+                        const dashStart = p1.clone().add(unit.clone().multiplyScalar(start));
+                        const dashEnd = p1.clone().add(unit.clone().multiplyScalar(end));
+                        group.add(createTubeSegment(dashStart, dashEnd, radius, material));
+                    }
+
+                    scene.add(group);
+                    return group;
+                }
+
+                const radius = isAccent ? 0.012 : 0.0075;
+                const line = createTubeSegment(p1, p2, radius, material);
+                scene.add(line);
+                return line;
+            }
+
+            // 棱锥骨架
+            const grpPyramid = new THREE.Group();
+            grpPyramid.add(createLine(points.A, points.B));
+            grpPyramid.add(createLine(points.B, points.C));
+            grpPyramid.add(createLine(points.C, points.D));
+            grpPyramid.add(createLine(points.D, points.A, 0x64748b, true)); // AD 被遮挡通常用虚线，这里简化处理
+            grpPyramid.add(createLine(points.P, points.A));
+            grpPyramid.add(createLine(points.P, points.B));
+            grpPyramid.add(createLine(points.P, points.C));
+            grpPyramid.add(createLine(points.P, points.D));
+            
+            // 辅助线 AC, BD
+            const lineAC = createLine(points.A, points.C, 0x94a3b8, true);
+            const lineBD = createLine(points.B, points.D, 0x94a3b8, true);
+            grpPyramid.add(lineAC);
+            grpPyramid.add(lineBD);
+            
+            scene.add(grpPyramid);
+            objects['Pyramid'] = grpPyramid;
+            objects['Line_BD'] = lineBD;
+
+            // 关键线 BE
+            const lineBE = createLine(points.B, points.E, 0xd946ef); // 洋红色强调
+            lineBE.material.depthTest = false; // 总是显示在最前
+            lineBE.renderOrder = 1;
+            lineBE.visible = false;
+            scene.add(lineBE);
+            objects['Line_BE'] = lineBE;
+
+            // --- 创建平面 ---
+            // 平面 PAC
+            const planeGeo = new THREE.BufferGeometry();
+            const vertices = new Float32Array([
+                points.P.x, points.P.y, points.P.z,
+                points.A.x, points.A.y, points.A.z,
+                points.C.x, points.C.y, points.C.z
+            ]);
+            planeGeo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+            planeGeo.setIndex([0, 1, 2]);
+            const planeMat = new THREE.MeshBasicMaterial({ 
+                color: 0x0ea5e9, 
+                side: THREE.DoubleSide, 
+                transparent: true, 
+                opacity: 0.2 
+            });
+            const planePAC = new THREE.Mesh(planeGeo, planeMat);
+            planePAC.visible = false;
+            scene.add(planePAC);
+            objects['Plane_PAC'] = planePAC;
+
+            // 法向量示意 (从O出发指向B方向)
+            const arrowDir = new THREE.Vector3(0, 0, 1).normalize(); // 在我们的模型中 BD 在 Z 轴
+            const arrowOrigin = points.O;
+            const arrowLength = 1.5;
+            const arrowColor = 0xef4444;
+            const normalArrow = new THREE.ArrowHelper(arrowDir, arrowOrigin, arrowLength, arrowColor, 0.2, 0.1);
+            normalArrow.visible = false;
+            scene.add(normalArrow);
+            objects['Normal_Vector'] = normalArrow;
+
+            // 坐标轴辅助
+            const axesHelper = new THREE.AxesHelper(3);
+            axesHelper.visible = false;
+            scene.add(axesHelper);
+            objects['Axis'] = axesHelper;
+        }
+
+        function updateUI() {
+            // 更新文本
+            const stepData = steps[currentStep];
+            document.getElementById('step-indicator').textContent = ui.stepTemplate
+                .replace('{current}', currentStep + 1)
+                .replace('{total}', steps.length);
+            
+            const container = document.getElementById('step-container');
+            container.innerHTML = `
+                <div class="step-title">${stepData.title}</div>
+                <div class="step-content">${stepData.content}</div>
+            `;
+            container.scrollTop = 0;
+
+            // 重新渲染 MathJax
+            typesetMath(document.getElementById('sidebar'));
+            if (!prefersReducedMotion) {
+                container.getAnimations().forEach((animation) => animation.cancel());
+                container.animate([
+                    { opacity: 0, transform: 'translateY(8px)' },
+                    { opacity: 1, transform: 'translateY(0)' }
+                ], {
+                    duration: 280,
+                    easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)'
+                });
+            } else {
+                container.classList.remove('is-changing');
+            }
+
+            // 更新按钮状态
+            document.getElementById('prev-btn').disabled = currentStep === 0;
+            document.getElementById('next-btn').textContent = currentStep === steps.length - 1 ? ui.finish : ui.next;
+            document.getElementById('next-btn').setAttribute(
+                'aria-label',
+                currentStep === steps.length - 1
+                    ? ui.finishAria
+                    : ui.nextAriaTemplate.replace('{step}', currentStep + 2)
+            );
+            document.getElementById('prev-btn').setAttribute(
+                'aria-label',
+                currentStep === 0
+                    ? ui.firstStepAria
+                    : ui.previousAriaTemplate.replace('{step}', currentStep)
+            );
+
+            // 更新 3D 场景状态
+            updateSceneState();
+        }
+
+        function updateSceneState() {
+            const data = steps[currentStep];
+            
+            // 1. 重置所有高亮对象的可见性
+            objects['Line_BE'].visible = false;
+            objects['Plane_PAC'].visible = false;
+            objects['Normal_Vector'].visible = false;
+            objects['Axis'].visible = false;
+
+            // 2. 根据 highlight 数组开启
+            if (data.highlight) {
+                data.highlight.forEach(key => {
+                    if (objects[key]) objects[key].visible = true;
+                });
+            }
+
+            // 累计显示逻辑 (后面的步骤通常包含前面的元素)
+            if (currentStep >= 1) {
+                objects['Line_BE'].visible = true;
+            }
+            if (currentStep >= 2) {
+                objects['Plane_PAC'].visible = true;
+            }
+
+            // 3. 移动相机 (平滑过渡)
+            if (data.cameraPos) {
+                const targetPos = new THREE.Vector3(data.cameraPos.x, data.cameraPos.y, data.cameraPos.z);
+                if (prefersReducedMotion) {
+                    camera.position.copy(targetPos);
+                    controls.target.copy(cameraTargetPoint);
+                    controls.update();
+                } else {
+                    targetCameraPosition = targetPos;
+                }
+            }
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            labelRenderer.setSize(container.clientWidth, container.clientHeight);
+
+            // 面板宽度变化后，重新评估公式是否需要常驻横向滚动条
+            markScrollableMath(document.getElementById('sidebar'));
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (targetCameraPosition) {
+                camera.position.lerp(targetCameraPosition, 0.07);
+                controls.target.lerp(cameraTargetPoint, 0.07);
+
+                if (camera.position.distanceTo(targetCameraPosition) < 0.015) {
+                    camera.position.copy(targetCameraPosition);
+                    controls.target.copy(cameraTargetPoint);
+                    targetCameraPosition = null;
+                }
+            }
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        // 事件绑定
+        document.getElementById('prev-btn').addEventListener('click', () => {
+            if (currentStep > 0) {
+                goToStep(currentStep - 1);
+            }
+        });
+
+        document.getElementById('next-btn').addEventListener('click', () => {
+            if (currentStep < steps.length - 1) {
+                goToStep(currentStep + 1);
+            }
+        });
+
+        // 启动
+        init();
+    </script>
+</body>
+</html>

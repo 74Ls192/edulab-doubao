@@ -1,0 +1,1492 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>立体几何交互教学</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+    <style>
+        :root {
+            --bg: #0A0D12;
+            --panel: #0E131A;
+            --viewport: #0C1117;
+            --inset: #0B1016;
+            --line: #1F2731;
+            --line-2: #243040;
+            --text: #E7ECF2;
+            --text-2: #B8C1CC;
+            --muted: #8B96A5;
+            --faint: #4E5A69;
+            --accent: #F0B240;
+            --accent-dark: #D89A2E;
+            --info: #78B4FF;
+            --ring: rgba(240, 178, 64, 0.35);
+            --radius: 6px;
+            --font-body: 'Instrument Sans', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+            --font-cn: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+            display: grid;
+            grid-template-rows: 56px minmax(0, 1fr);
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font-body);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        button { font: inherit; cursor: pointer; }
+
+        .skip-link {
+            position: fixed;
+            left: 16px;
+            top: 16px;
+            z-index: 999;
+            padding: 10px 14px;
+            border-radius: var(--radius);
+            background: var(--accent);
+            color: #0A0D12;
+            font-weight: 600;
+            text-decoration: none;
+            transform: translateY(-160%);
+            transition: transform 0.2s ease;
+        }
+        .skip-link:focus { transform: translateY(0); outline: 3px solid var(--ring); }
+
+        /* ---------- 顶栏 ---------- */
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            padding: 0 24px;
+            border-bottom: 1px solid var(--line);
+        }
+        .crumbs {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            letter-spacing: 0.06em;
+            color: var(--muted);
+        }
+        .crumbs .brand { color: var(--text); font-weight: 500; }
+        .crumbs .sep { color: var(--faint); }
+        .crumbs #lesson-meta {
+            color: var(--accent);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .topbar-right { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+        .progress { display: flex; gap: 4px; max-width: 34vw; }
+        .progress i {
+            display: block;
+            flex: 0 1 40px;
+            min-width: 12px;
+            height: 3px;
+            background: var(--line-2);
+            transition: background 0.25s ease;
+        }
+        .progress i.is-done { background: rgba(240, 178, 64, 0.45); }
+        .progress i.is-current { background: var(--accent); }
+        .topbar-step {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            letter-spacing: 0.06em;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        /* ---------- 主体：观测窗在左，解析面板在右 ---------- */
+        .main {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 480px;
+            min-height: 0;
+        }
+
+        /* ---------- 观测窗 ---------- */
+        #canvas-container {
+            position: relative;
+            min-width: 0;
+            min-height: 0;
+            overflow: hidden;
+            /* 网格由 3D 场景里的地平面提供（见 makeGround），这里只铺底色。
+               WebGL 画布不透明，再叠一层 CSS 网格既看不见也会误导后来的人。 */
+            background: var(--viewport);
+        }
+        /* 四角取景框 */
+        .bracket {
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            z-index: 90;
+            opacity: 0.8;
+            pointer-events: none;
+        }
+        .bracket.tl { left: 20px; top: 20px; border-left: 2px solid var(--accent); border-top: 2px solid var(--accent); }
+        .bracket.tr { right: 20px; top: 20px; border-right: 2px solid var(--accent); border-top: 2px solid var(--accent); }
+        .bracket.bl { left: 20px; bottom: 20px; border-left: 2px solid var(--accent); border-bottom: 2px solid var(--accent); }
+        .bracket.br { right: 20px; bottom: 20px; border-right: 2px solid var(--accent); border-bottom: 2px solid var(--accent); }
+
+        #scene-label {
+            position: absolute;
+            left: 48px;
+            top: 24px;
+            z-index: 100;
+            max-width: calc(100% - 340px);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            letter-spacing: 0.18em;
+            color: var(--muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            pointer-events: none;
+        }
+        /* 网格刻度说明：只有知道 model.scale 时才填内容（见 initializeLessonText） */
+        #grid-hint {
+            position: absolute;
+            right: 48px;
+            bottom: 48px;
+            z-index: 100;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            letter-spacing: 0.1em;
+            color: var(--faint);
+            pointer-events: none;
+        }
+        #camera-indicator {
+            position: absolute;
+            right: 48px;
+            bottom: 28px;
+            z-index: 100;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            letter-spacing: 0.14em;
+            color: var(--muted);
+            pointer-events: none;
+        }
+        .tip-bubble {
+            position: absolute;
+            left: 48px;
+            bottom: 28px;
+            z-index: 100;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            color: var(--faint);
+            pointer-events: none;
+        }
+
+        .label {
+            font-family: var(--font-body);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            text-shadow: -2px -2px 0 #0C1117, 2px -2px 0 #0C1117, -2px 2px 0 #0C1117, 2px 2px 0 #0C1117;
+            pointer-events: none;
+            user-select: none;
+        }
+        .measure-label {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--accent);
+            background: rgba(11, 16, 22, 0.88);
+            padding: 1px 6px;
+            border-radius: 4px;
+            border: 1px solid var(--line-2);
+            pointer-events: none;
+            user-select: none;
+            white-space: nowrap;
+            line-height: 1.5;
+        }
+
+        #measure-toggle {
+            position: absolute;
+            right: 48px;
+            top: 18px;
+            z-index: 100;
+            height: 32px;
+            padding: 0 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid var(--line-2);
+            border-radius: 4px;
+            background: #10151C;
+            color: var(--text);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            transition: border-color 0.18s ease, color 0.18s ease;
+        }
+        #measure-toggle::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--faint);
+            transition: background 0.18s ease;
+        }
+        #measure-toggle.is-on { border-color: var(--accent); }
+        #measure-toggle.is-on::before { background: var(--accent); }
+        #measure-toggle:hover { border-color: var(--muted); }
+        #measure-toggle:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+        .readout-panel {
+            position: absolute;
+            left: 48px;
+            top: 52px;
+            z-index: 100;
+            min-width: 200px;
+            padding: 12px 14px;
+            background: rgba(11, 16, 22, 0.92);
+            border: 1px solid var(--line-2);
+            border-radius: var(--radius);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-2);
+        }
+        .readout-title {
+            font-size: 11px;
+            letter-spacing: 0.14em;
+            color: var(--accent);
+            margin-bottom: 8px;
+        }
+        .readout-row { display: flex; justify-content: space-between; gap: 16px; padding: 3px 0; }
+        .readout-row b { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 500; }
+
+        /* ---------- 右侧解析面板 ---------- */
+        #sidebar {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            min-width: 0;
+            background: var(--panel);
+            border-left: 1px solid var(--line);
+        }
+        .panel-scroll {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 24px 28px 8px;
+            scrollbar-width: thin;
+            scrollbar-color: var(--line-2) transparent;
+            -webkit-overflow-scrolling: touch;
+        }
+        .panel-scroll::-webkit-scrollbar { width: 8px; }
+        .panel-scroll::-webkit-scrollbar-track { background: transparent; }
+        .panel-scroll::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--line-2); }
+        .panel-scroll::-webkit-scrollbar-thumb:hover { background: var(--faint); }
+
+        .section-label {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            letter-spacing: 0.22em;
+            color: var(--accent);
+            margin-bottom: 10px;
+        }
+
+        /* ---------- 题面 ---------- */
+        h1 {
+            margin: 0 0 22px;
+            font-family: var(--font-cn);
+            font-size: 19px;
+            line-height: 1.65;
+            font-weight: 500;
+            color: var(--text);
+        }
+        h1.is-medium { font-size: 17px; line-height: 1.7; }
+        h1.is-long { font-size: 15.5px; line-height: 1.75; font-weight: 400; color: var(--text-2); }
+        h1.is-xlong { font-size: 14.5px; line-height: 1.8; font-weight: 400; color: var(--text-2); }
+
+        /* ---------- 答案读数框 ---------- */
+        .answer-card {
+            margin-bottom: 22px;
+            padding: 15px 17px;
+            background: var(--inset);
+            border: 1px solid var(--line-2);
+            border-radius: var(--radius);
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+            column-gap: 18px;
+            align-items: end;
+        }
+        .answer-card.is-stacked {
+            grid-template-columns: minmax(0, 1fr);
+            row-gap: 12px;
+            align-items: start;
+        }
+        #answer-title {
+            display: block;
+            margin-bottom: 7px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            letter-spacing: 0.18em;
+            color: var(--muted);
+        }
+        .answer-card strong {
+            display: block;
+            font-family: var(--font-cn);
+            font-size: 12.5px;
+            font-weight: 400;
+            line-height: 1.55;
+            color: var(--text-2);
+        }
+        .answer-value {
+            min-width: 0;
+            font-size: 34px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            color: var(--accent);
+            text-align: right;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .answer-value::-webkit-scrollbar { display: none; }
+        .answer-card.is-stacked .answer-value { text-align: left; font-size: 26px; }
+
+        .answer-list { display: grid; min-width: 0; }
+        .answer-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+            gap: 4px 14px;
+            align-items: baseline;
+            padding: 9px 0;
+            border-top: 1px solid var(--line);
+        }
+        .answer-row:first-child { border-top: none; padding-top: 2px; }
+        .answer-row > span {
+            font-family: var(--font-cn);
+            font-size: 12.5px;
+            line-height: 1.55;
+            color: var(--muted);
+            min-width: 0;
+        }
+        .answer-row > b {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--accent);
+            text-align: right;
+            min-width: 0;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .answer-row > b::-webkit-scrollbar { display: none; }
+
+        /* ---------- 步骤时间线 ---------- */
+        #step-container {
+            min-width: 0;
+            opacity: 1;
+            transform: translateY(0);
+            transition: opacity 0.28s ease, transform 0.28s ease;
+        }
+        #step-container.is-changing { opacity: 0; transform: translateY(6px); }
+
+        .tl-row { display: grid; grid-template-columns: 22px minmax(0, 1fr); column-gap: 14px; }
+        .tl-rail { display: flex; flex-direction: column; align-items: center; }
+        .tl-dot {
+            display: block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-top: 6px;
+            background: var(--line-2);
+            flex-shrink: 0;
+            transition: background 0.25s ease, box-shadow 0.25s ease;
+        }
+        .tl-line { display: block; width: 1px; flex-grow: 1; background: var(--line-2); margin: 4px 0; }
+        .tl-row:last-child .tl-line { display: none; }
+        .tl-body { padding-bottom: 18px; min-width: 0; }
+        .tl-row:last-child .tl-body { padding-bottom: 4px; }
+        .tl-head { display: flex; align-items: baseline; gap: 10px; }
+        .tl-num { font-family: var(--font-mono); font-size: 11px; color: var(--faint); flex-shrink: 0; }
+        .step-title { font-family: var(--font-cn); font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+        .tl-row.is-done .tl-dot { background: rgba(240, 178, 64, 0.45); }
+        .tl-row.is-current .tl-dot { background: var(--accent); box-shadow: 0 0 0 4px rgba(240, 178, 64, 0.16); }
+        .tl-row.is-current .tl-num { color: var(--accent); }
+        .tl-row.is-current .step-title { font-size: 16px; font-weight: 700; color: var(--text); }
+
+        .step-content {
+            margin-top: 12px;
+            font-family: var(--font-cn);
+            font-size: 13.5px;
+            line-height: 1.85;
+            color: var(--text-2);
+        }
+        .step-content p { margin: 0 0 12px; }
+        .step-content p:last-child { margin-bottom: 0; }
+        .step-content ul, .step-content ol { margin: 0 0 12px; padding-left: 1.25em; }
+        .step-content li { margin-bottom: 4px; }
+
+        .step-content mjx-container[display="true"] {
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            overscroll-behavior-x: contain;
+            -webkit-overflow-scrolling: touch;
+        }
+        .step-content mjx-container[display="true"].is-scrollable {
+            overflow-x: scroll;
+            padding-bottom: 10px;
+            scrollbar-width: thin;
+            scrollbar-color: var(--line-2) transparent;
+            cursor: grab;
+            touch-action: pan-x;
+        }
+        .step-content mjx-container[display="true"].is-scrollable.is-dragging {
+            cursor: grabbing;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        .step-content mjx-container[display="true"].is-scrollable::-webkit-scrollbar {
+            -webkit-appearance: none;
+            height: 8px;
+        }
+        .step-content mjx-container[display="true"].is-scrollable::-webkit-scrollbar-track { background: transparent; }
+        .step-content mjx-container[display="true"].is-scrollable::-webkit-scrollbar-thumb {
+            border-radius: 999px;
+            background: var(--line-2);
+        }
+        .step-content p, .step-content li {
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: thin;
+            scrollbar-color: var(--line-2) transparent;
+        }
+        .step-content p::-webkit-scrollbar, .step-content li::-webkit-scrollbar { height: 6px; }
+        .step-content p::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--line-2); }
+
+        .math-term { font-family: var(--font-mono); color: var(--accent); font-size: 0.92em; }
+
+        /* ---------- 导航 ---------- */
+        .nav-bar {
+            flex-shrink: 0;
+            display: flex;
+            gap: 10px;
+            padding: 16px 28px 20px;
+            border-top: 1px solid var(--line);
+        }
+        .btn {
+            height: 44px;
+            padding: 0 20px;
+            border: 1px solid transparent;
+            border-radius: var(--radius);
+            font-family: var(--font-cn);
+            font-size: 14px;
+            transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+        }
+        .btn:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+        .btn-prev { background: transparent; border-color: var(--line-2); color: var(--text-2); }
+        .btn-prev:hover:not(:disabled) { border-color: var(--muted); color: var(--text); }
+        .btn-next {
+            flex-grow: 1;
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #0A0D12;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+        }
+        .btn-next:hover:not(:disabled) { background: var(--accent-dark); border-color: var(--accent-dark); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* ---------- 响应式 ---------- */
+        @media (max-width: 1200px) {
+            .main { grid-template-columns: minmax(0, 1fr) 400px; }
+            .panel-scroll { padding: 20px 20px 8px; }
+            .nav-bar { padding: 14px 20px 18px; }
+            #scene-label { left: 40px; max-width: calc(100% - 300px); }
+            .tip-bubble, #camera-indicator { left: 40px; }
+            #camera-indicator { left: auto; right: 40px; }
+        }
+
+        @media (max-width: 860px) {
+            body { grid-template-rows: 50px minmax(0, 1fr); }
+            .topbar { padding: 0 14px; }
+            .main { grid-template-columns: minmax(0, 1fr); grid-template-rows: 44vh minmax(0, 1fr); }
+            #sidebar { border-left: none; border-top: 1px solid var(--line); }
+            .panel-scroll { padding: 16px 16px 8px; }
+            .nav-bar { padding: 12px 16px 14px; }
+            .progress i { flex-basis: 24px; }
+            .bracket { width: 14px; height: 14px; }
+            #scene-label { left: 42px; top: 18px; max-width: calc(100% - 200px); }
+            #measure-toggle { right: 42px; top: 14px; height: 28px; }
+            .tip-bubble { left: 42px; bottom: 22px; }
+            #camera-indicator { right: 42px; bottom: 22px; }
+            .readout-panel { left: 42px; top: 44px; min-width: 160px; font-size: 11px; }
+            h1 { font-size: 16px; }
+            .answer-value { font-size: 26px; }
+            .tl-row.is-current .step-title { font-size: 15px; }
+            .step-content { font-size: 13px; line-height: 1.75; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                scroll-behavior: auto !important;
+                transition-duration: 0.01ms !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+            }
+        }
+    </style>
+
+    <!-- Import Maps -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <!-- MathJax -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$','$$']],
+                processEscapes: true,
+                processEnvironments: true
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+            },
+            startup: {
+                pageReady: () => {
+                    return MathJax.startup.defaultPageReady().then(() => {
+                        console.log('MathJax initial rendering complete');
+                    });
+                }
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <!-- 课程数据（由 generate.py 注入；语言、题面、步骤、3D 模型全部数据驱动） -->
+    <script id="lesson-data" type="application/json">__LESSON_DATA__</script>
+</head>
+<body>
+
+    <a class="skip-link" id="skip-link" href="#step-container">跳到解题步骤</a>
+
+    <!-- 顶栏 -->
+    <header class="topbar">
+        <div class="crumbs">
+            <span class="brand">EDULAB · DOUBAO</span>
+            <span class="sep">/</span>
+            <span id="lesson-meta">交互解题</span>
+        </div>
+        <div class="topbar-right">
+            <div class="progress" id="progress-bars" aria-hidden="true"></div>
+            <span class="topbar-step" id="step-indicator"></span>
+        </div>
+    </header>
+
+    <main class="main">
+        <!-- 左：三维观测窗 -->
+        <div id="canvas-container" role="img" aria-label="三维交互演示">
+            <span class="bracket tl" aria-hidden="true"></span>
+            <span class="bracket tr" aria-hidden="true"></span>
+            <span class="bracket bl" aria-hidden="true"></span>
+            <span class="bracket br" aria-hidden="true"></span>
+            <span id="scene-label"></span>
+            <span class="tip-bubble" id="interaction-tip">左键旋转 · 滚轮缩放 · 右键平移</span>
+            <span id="grid-hint"></span>
+            <span id="camera-indicator"></span>
+        </div>
+
+        <!-- 右：解析面板 -->
+        <aside id="sidebar" aria-label="立体几何解题步骤面板">
+            <div class="panel-scroll" id="panel-scroll">
+                <div class="section-label">PROBLEM</div>
+                <h1 id="lesson-title"></h1>
+
+                <section class="answer-card" id="answer-card" aria-label="最终答案">
+                    <div>
+                        <span id="answer-title">最终答案</span>
+                        <strong id="answer-summary"></strong>
+                    </div>
+                    <div class="answer-value" id="answer-value"></div>
+                </section>
+
+                <div id="step-container" role="region" aria-live="polite" tabindex="-1">
+                    <!-- 动态内容 -->
+                </div>
+            </div>
+            <div class="nav-bar">
+                <button id="prev-btn" class="btn btn-prev" type="button" aria-controls="step-container" disabled>上一步</button>
+                <button id="next-btn" class="btn btn-next" type="button" aria-controls="step-container">下一步</button>
+            </div>
+        </aside>
+    </main>
+
+    <!-- 逻辑脚本 -->
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        // ===== 数据驱动：题面 / 步骤 / 3D 模型全部来自数据岛 =====
+        const DATA = JSON.parse(document.getElementById('lesson-data').textContent);
+        const lesson = DATA.lesson;
+        const steps = DATA.steps;
+        const model = DATA.model;
+
+        const defaultUI = {
+            pageTitle: lesson.title,
+            skipToSteps: "跳到解题步骤",
+            sidebarLabel: "立体几何解题步骤面板",
+            answerCardLabel: "最终答案",
+            answerTitle: "最终答案",
+            solutionCardLabel: "解题步骤",
+            sceneLabel: "立体几何三维交互演示",
+            interactionTip: "左键旋转 · 滚轮缩放 · 右键平移",
+            previous: "上一步",
+            next: "下一步",
+            finish: "完成",
+            stepTemplate: "步骤 {current} / {total}",
+            finishAria: "完成解题",
+            nextAriaTemplate: "进入步骤 {step}",
+            previousAriaTemplate: "返回步骤 {step}",
+            firstStepAria: "已经是第一步",
+            measureToggleOn: "长度标注：开",
+            measureToggleOff: "长度标注：关",
+            cameraTemplate: "镜头 {current} / {total}",
+            gridUnit: "地面网格 1 格 = 1 个单位"
+        };
+        const ui = { ...defaultUI, ...(lesson.ui || {}) };
+
+        // 颜色板（数据里以语义名引用）
+        const COLORS = {
+            frame: 0xc3cbd6,     // 骨架：浅灰线（深色背景上）
+            aux: 0x4e5a69,       // 辅助线：暗灰
+            emphasis: 0xf0b240,  // 所求元素：琥珀（页面主色）
+            normal: 0x78b4ff,    // 法向量：蓝色箭头
+            plane: 0x78b4ff,     // 平面：蓝色半透明
+            point: 0xe7ecf2      // 顶点
+        };
+        function colorOf(name, fallback) {
+            return (name != null && COLORS[name] != null) ? COLORS[name] : fallback;
+        }
+
+        // 数学坐标 <-> three 坐标（draggable 实时数值用数学坐标计算）
+        const SCALE = model.scale || 1;
+        function threeFromMath(p) {
+            return new THREE.Vector3(p[0] * SCALE, p[2] * SCALE, p[1] * SCALE);
+        }
+
+        // Three.js 变量
+        let scene, camera, renderer, labelRenderer, controls;
+        let currentStep = 0;
+        let measuresOn = true; // 长度标注总开关
+        const objects = {}; // 存储所有3D对象以便管理
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const cameraTargetPoint = new THREE.Vector3(
+            ...(model.target || [0, 0.45, 0])
+        );
+        let targetCameraPosition = null;
+
+        function initializeLessonText() {
+            document.documentElement.lang = lesson.language || 'zh-CN';
+            document.title = ui.pageTitle || lesson.title;
+            document.getElementById('skip-link').textContent = ui.skipToSteps;
+            document.getElementById('sidebar').setAttribute('aria-label', ui.sidebarLabel);
+            document.getElementById('answer-card').setAttribute('aria-label', ui.answerCardLabel);
+            document.getElementById('answer-title').textContent = ui.answerTitle;
+            document.getElementById('step-container').setAttribute('aria-label', ui.solutionCardLabel);
+            document.getElementById('canvas-container').setAttribute('aria-label', ui.sceneLabel);
+            document.getElementById('interaction-tip').textContent = ui.interactionTip;
+            // 只有知道 scale（三维坐标 = 数学坐标 × scale）时，"一格 = 一个单位"才成立
+            document.getElementById('grid-hint').textContent = model.scale ? ui.gridUnit : '';
+            document.getElementById('prev-btn').textContent = ui.previous;
+            document.getElementById('lesson-meta').textContent = lesson.meta || '';
+
+            // 题面用 innerHTML：允许 <br> 分小问，$…$ 交给 MathJax（渲染范围见 typesetLesson）
+            const titleEl = document.getElementById('lesson-title');
+            titleEl.innerHTML = lesson.title || '';
+            // 题面越长字号越小，避免长题目把下方解析区压扁
+            const titleLen = (lesson.title || '').replace(/<[^>]+>/g, '').length;
+            titleEl.className = titleLen > 240 ? 'is-xlong'
+                : titleLen > 130 ? 'is-long'
+                : titleLen > 55 ? 'is-medium' : '';
+
+            renderAnswer();
+        }
+
+        // 答案区：单值用大号数字，多问用 lesson.answers 逐行列出
+        function renderAnswer() {
+            const card = document.getElementById('answer-card');
+            const summary = document.getElementById('answer-summary');
+            const value = document.getElementById('answer-value');
+            const answers = Array.isArray(lesson.answers) ? lesson.answers : null;
+
+            if (answers && answers.length) {
+                // 多问：把「最终答案」和 answerLabel 并进同一行小标题，避免两行标签叠在一起
+                document.getElementById('answer-title').textContent =
+                    lesson.answerLabel ? `${ui.answerTitle} · ${lesson.answerLabel}` : ui.answerTitle;
+                summary.innerHTML = '';
+                summary.hidden = true;
+                value.innerHTML = '';
+                const list = document.createElement('div');
+                list.className = 'answer-list';
+                list.innerHTML = answers.map((a) =>
+                    `<div class="answer-row"><span>${a.label || ''}</span><b>${a.value || ''}</b></div>`
+                ).join('');
+                value.appendChild(list);
+                card.classList.add('is-stacked');
+                return;
+            }
+
+            summary.hidden = false;
+            summary.innerHTML = lesson.answerLabel || '';
+            value.innerHTML = lesson.answerValue || '';
+            // 答案本身很长时改为堆叠，否则 1fr 那列会被挤到一字一行
+            const valueLen = (lesson.answerValue || '').replace(/<[^>]+>/g, '').length;
+            card.classList.toggle('is-stacked', valueLen > 28);
+        }
+
+        function markScrollableMath(root) {
+            const blocks = root.querySelectorAll('.step-content mjx-container[display="true"]');
+            blocks.forEach((el) => {
+                // 公式实际宽度超出可视宽度时，强制常驻显示横向滚动条
+                const overflowing = el.scrollWidth - el.clientWidth > 1;
+                el.classList.toggle('is-scrollable', overflowing);
+            });
+        }
+
+        function typesetMath(container) {
+            // MathJax 异步加载：未就绪时轮询重试，避免“缓存快加载”时
+            // 在 CSS2D 标签挂载/数据注入之前就错过排版，导致 3D 长度标签显示原始 $…$。
+            const run = () => {
+                if (window.MathJax && window.MathJax.typesetPromise) {
+                    window.MathJax.typesetPromise([container])
+                        .then(() => markScrollableMath(container))
+                        .catch((err) => console.log(err));
+                } else {
+                    setTimeout(run, 120);
+                }
+            };
+            run();
+        }
+
+        // 鼠标按住拖拽即可横向滑动溢出的公式（不依赖系统滚动条）
+        function enableDragScroll(scope) {
+            let dragEl = null;
+            let startX = 0;
+            let startScroll = 0;
+            let pointerId = null;
+            let moved = false;
+
+            function findScrollable(target) {
+                let el = target;
+                while (el && el !== scope) {
+                    if (el.scrollWidth - el.clientWidth > 1) {
+                        const ox = getComputedStyle(el).overflowX;
+                        if (ox === 'auto' || ox === 'scroll') return el;
+                    }
+                    el = el.parentElement;
+                }
+                return null;
+            }
+
+            scope.addEventListener('pointerdown', (e) => {
+                if (e.pointerType === 'touch') return; // 触屏用原生滑动
+                const el = findScrollable(e.target);
+                if (!el) return;
+                dragEl = el;
+                startX = e.clientX;
+                startScroll = el.scrollLeft;
+                pointerId = e.pointerId;
+                moved = false;
+                el.classList.add('is-dragging');
+                try { el.setPointerCapture(pointerId); } catch (_) {}
+            });
+
+            scope.addEventListener('pointermove', (e) => {
+                if (!dragEl) return;
+                const dx = e.clientX - startX;
+                if (Math.abs(dx) > 2) moved = true;
+                dragEl.scrollLeft = startScroll - dx;
+                e.preventDefault();
+            });
+
+            function end() {
+                if (!dragEl) return;
+                try { dragEl.releasePointerCapture(pointerId); } catch (_) {}
+                dragEl.classList.remove('is-dragging');
+                dragEl = null;
+                pointerId = null;
+            }
+
+            scope.addEventListener('pointerup', end);
+            scope.addEventListener('pointercancel', end);
+            scope.addEventListener('lostpointercapture', end);
+            // 拖拽过程中阻止误触发的点击
+            scope.addEventListener('click', (e) => {
+                if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; }
+            }, true);
+        }
+
+        function goToStep(index) {
+            currentStep = Math.max(0, Math.min(index, steps.length - 1));
+            updateUI();
+        }
+
+        // 初始化场景
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            // 1. 场景
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0c1117);
+            scene.fog = new THREE.Fog(0x0c1117, 14, 70);
+
+            // 2. 相机
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+            const ic = model.initialCamera || [5, 4, 5];
+            camera.position.set(ic[0], ic[1], ic[2]);
+
+            // 3. 渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            labelRenderer = new CSS2DRenderer();
+            labelRenderer.setSize(container.clientWidth, container.clientHeight);
+            labelRenderer.domElement.style.position = 'absolute';
+            labelRenderer.domElement.style.top = '0px';
+            labelRenderer.domElement.style.pointerEvents = 'none';
+            container.appendChild(labelRenderer.domElement);
+
+            // 4. 控制器
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = !prefersReducedMotion;
+            controls.dampingFactor = 0.05;
+
+            // 5. 灯光
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(5, 10, 7);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            // 6. 地平面（空间参照）
+            scene.add(makeGround());
+
+            // 7. 构建几何模型（通用渲染器：读 model 数据）
+            buildModel();
+
+            // 8. 监听调整大小
+            window.addEventListener('resize', onWindowResize);
+
+            // 9. 初始化UI
+            initializeLessonText();
+            enableDragScroll(document.getElementById('panel-scroll'));
+            updateUI();
+            // 先渲染一帧，让 CSS2D 长度标签 DOM 挂载，再排版（否则缓存秒开时会漏排）
+            labelRenderer.render(scene, camera);
+            typesetMath(document.getElementById('canvas-container'));
+            buildMeasureToggle();
+
+            // 10. 开始动画
+            animate();
+        }
+
+        // ===== 通用几何工具 =====
+        function v3(arr) {
+            return new THREE.Vector3(arr[0], arr[1], arr[2]);
+        }
+
+        const POINTS = {}; // name -> THREE.Vector3
+        function pt(nameOrCoords) {
+            if (Array.isArray(nameOrCoords)) return v3(nameOrCoords);
+            return POINTS[nameOrCoords].clone();
+        }
+
+        function createTubeSegment(p1, p2, radius, material) {
+            const direction = new THREE.Vector3().subVectors(p2, p1);
+            const length = direction.length();
+            const geometry = new THREE.CylinderGeometry(radius, radius, length, 14);
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.copy(new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5));
+            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+            return mesh;
+        }
+
+        // 返回一条线（实/虚），不自动加入场景，由调用方决定父节点
+        function makeLine(p1, p2, color = COLORS.frame, dashed = false, emphasis = false) {
+            const material = new THREE.MeshBasicMaterial({ color });
+
+            if (dashed) {
+                const group = new THREE.Group();
+                const direction = new THREE.Vector3().subVectors(p2, p1);
+                const length = direction.length();
+                const unit = direction.clone().normalize();
+                const dashSize = 0.22;
+                const gapSize = 0.13;
+                const radius = 0.0055;
+
+                for (let start = 0; start < length; start += dashSize + gapSize) {
+                    const end = Math.min(start + dashSize, length);
+                    const dashStart = p1.clone().add(unit.clone().multiplyScalar(start));
+                    const dashEnd = p1.clone().add(unit.clone().multiplyScalar(end));
+                    group.add(createTubeSegment(dashStart, dashEnd, radius, material));
+                }
+                return group;
+            }
+
+            const radius = emphasis ? 0.012 : 0.0075;
+            return createTubeSegment(p1, p2, radius, material);
+        }
+
+        function makePlane(points) {
+            const geo = new THREE.BufferGeometry();
+            const flat = [];
+            points.forEach((p) => { flat.push(p.x, p.y, p.z); });
+            geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(flat), 3));
+            if (points.length === 3) {
+                geo.setIndex([0, 1, 2]);
+            } else if (points.length === 4) {
+                geo.setIndex([0, 1, 2, 0, 2, 3]);
+            }
+            const mat = new THREE.MeshBasicMaterial({
+                color: COLORS.plane,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.16
+            });
+            return new THREE.Mesh(geo, mat);
+        }
+
+        // 圆柱 / 圆锥侧面：半透明曲面 + 上下轮廓圆。半径用 three 坐标（= 数学半径 × scale）。
+        function makeRoundSolid(p1, p2, rBottom, rTop, color, opacity) {
+            const dir = new THREE.Vector3().subVectors(p2, p1);
+            const len = dir.length();
+            const group = new THREE.Group();
+            const makeGeo = () => new THREE.CylinderGeometry(rTop, rBottom, len, 48, 1, true);
+            group.add(new THREE.Mesh(makeGeo(), new THREE.MeshBasicMaterial({
+                color, transparent: true, opacity: opacity != null ? opacity : 0.14,
+                side: THREE.DoubleSide, depthWrite: false
+            })));
+            group.add(new THREE.LineSegments(
+                new THREE.EdgesGeometry(makeGeo()),
+                new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.45 })
+            ));
+            group.position.copy(new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5));
+            group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+            return group;
+        }
+
+        // 地平面：一块比背景略亮、向外渐隐的底板 + 贴合几何体尺寸的网格。
+        // 给学生一个明确的"水平面"参照，空间结构（谁在上、谁在下、投影落在哪）才读得出来。
+        // 网格一格 = 数学坐标 1 个单位（格宽取 model.scale），可以直接数格子读坐标。
+        function makeGround() {
+            const pts = Object.values(model.points || {});
+            const cell = model.scale || 1;
+            let cx = 0, cz = 0, groundY = 0, reach = cell * 3;
+
+            if (pts.length) {
+                const xs = pts.map((p) => p[0]);
+                const ys = pts.map((p) => p[1]);
+                const zs = pts.map((p) => p[2]);
+                // 中心对齐到整格，网格线才会落在整数坐标上
+                cx = Math.round((Math.min(...xs) + Math.max(...xs)) / 2 / cell) * cell;
+                cz = Math.round((Math.min(...zs) + Math.max(...zs)) / 2 / cell) * cell;
+                // 常规几何体底面就在 y=0；整体跨过原点的（如正四面体）则把地面下沉到最低点，
+                // 免得一半几何体埋进地里。
+                groundY = Math.min(0, ...ys);
+                reach = Math.max(
+                    ...xs.map((x) => Math.abs(x - cx)),
+                    ...zs.map((z) => Math.abs(z - cz))
+                );
+            }
+            const half = Math.ceil(reach / cell + 2) * cell;   // 往外多留两格
+            const divisions = Math.max(2, Math.round((half * 2) / cell));
+
+            const group = new THREE.Group();
+            group.position.set(cx, groundY, cz);
+
+            // 底板：径向渐隐，避免出现生硬的方形边界
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            const grad = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+            grad.addColorStop(0, 'rgba(33, 48, 66, 0.95)');
+            grad.addColorStop(0.62, 'rgba(25, 37, 51, 0.72)');
+            grad.addColorStop(1, 'rgba(18, 27, 38, 0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 256, 256);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
+            const plate = new THREE.Mesh(
+                new THREE.PlaneGeometry(half * 2, half * 2),
+                new THREE.MeshBasicMaterial({
+                    map: texture,
+                    transparent: true,
+                    depthWrite: false,
+                    side: THREE.DoubleSide
+                })
+            );
+            plate.rotation.x = -Math.PI / 2;
+            plate.position.y = -0.006;      // 压在网格线下方，避免 z-fighting
+            plate.renderOrder = -2;
+            group.add(plate);
+
+            const grid = new THREE.GridHelper(half * 2, divisions, 0x415471, 0x25323f);
+            grid.material.transparent = true;
+            grid.material.opacity = 0.85;
+            grid.position.y = -0.002;       // 略低于底面棱，免得和贴地的棱抢深度
+            grid.renderOrder = -1;
+            group.add(grid);
+
+            return group;
+        }
+
+        function buildModel() {
+            // 1. 点坐标
+            for (const [name, coords] of Object.entries(model.points)) {
+                POINTS[name] = v3(coords);
+            }
+
+            // 2. 顶点小球 + 标签
+            const sphereNames = model.spheres || Object.keys(model.points);
+            const dragName = model.draggable ? model.draggable.point : null;
+            sphereNames.forEach((name) => {
+                const isDrag = name === dragName;
+                const geometry = new THREE.SphereGeometry(isDrag ? 0.12 : 0.06, 18, 18);
+                const material = new THREE.MeshBasicMaterial({ color: isDrag ? COLORS.emphasis : COLORS.point });
+                const sphere = new THREE.Mesh(geometry, material);
+                sphere.position.copy(POINTS[name]);
+                scene.add(sphere);
+                objects[`Point_${name}`] = sphere;
+
+                const div = document.createElement('div');
+                div.className = 'label';
+                div.textContent = name;
+                div.style.marginTop = '-1em';
+                const label = new CSS2DObject(div);
+                label.position.set(0, 0.15, 0);
+                sphere.add(label);
+            });
+
+            // 3. 骨架棱（始终可见）
+            const frame = new THREE.Group();
+            (model.edges || []).forEach((e) => {
+                const line = makeLine(pt(e.a), pt(e.b), colorOf(e.color, COLORS.frame), !!e.dashed);
+                frame.add(line);
+                if (e.name) objects[e.name] = line;
+            });
+            scene.add(frame);
+            objects['Frame'] = frame;
+
+            // 4. 曲面体（圆柱/圆锥，和骨架一样始终可见）
+            if (model.solid) {
+                const solidObj = createElementObj(model.solid);
+                if (solidObj) { scene.add(solidObj); objects['Solid'] = solidObj; }
+            }
+
+            // 5. 可切换的命名元素（默认隐藏，按步骤 highlight 显示；高亮永远画在最前）
+            const elements = model.elements || {};
+            for (const [key, el] of Object.entries(elements)) {
+                const obj = createElementObj(el);
+                if (obj) {
+                    obj.visible = false;
+                    scene.add(obj);
+                    objects[key] = obj;
+                }
+            }
+
+            // 6. 动点拖拽（若声明）
+            if (model.draggable) setupDraggable();
+        }
+
+        // 由元素定义创建 3D 对象（建模与拖拽重建共用）
+        function createElementObj(el) {
+            let obj = null;
+            if (el.type === 'line') {
+                obj = makeLine(pt(el.a), pt(el.b), colorOf(el.color, COLORS.emphasis), !!el.dashed, true);
+                if (el.depthTest === false) {
+                    const setNoDepth = (m) => { if (m.material) { m.material.depthTest = false; m.renderOrder = 1; } };
+                    if (obj.isGroup) obj.children.forEach(setNoDepth); else setNoDepth(obj);
+                }
+            } else if (el.type === 'plane') {
+                obj = makePlane((el.pts || []).map((p) => pt(p)));
+            } else if (el.type === 'arrow') {
+                const dir = v3(el.dir).normalize();
+                const origin = pt(el.origin);
+                const head = el.head || [0.2, 0.1];
+                obj = new THREE.ArrowHelper(dir, origin, el.length || 1.5, colorOf(el.color, COLORS.normal), head[0], head[1]);
+            } else if (el.type === 'sphere') {
+                // 球面：translucent 实心球 + 经纬线框，用于外接球/球 O 等
+                const center = pt(el.center);
+                const radius = el.radius || 1;
+                const col = colorOf(el.color, COLORS.plane);
+                const group = new THREE.Group();
+                const solid = new THREE.Mesh(
+                    new THREE.SphereGeometry(radius, 40, 32),
+                    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: el.opacity != null ? el.opacity : 0.12, side: THREE.DoubleSide, depthWrite: false })
+                );
+                const wire = new THREE.LineSegments(
+                    new THREE.WireframeGeometry(new THREE.SphereGeometry(radius, 24, 16)),
+                    new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.25 })
+                );
+                group.add(solid); group.add(wire);
+                group.position.copy(center);
+                obj = group;
+            } else if (el.type === 'cylinder' || el.type === 'cone') {
+                // 圆柱：bottom/top 两个圆心；圆锥：base 圆心 + apex 顶点（顶半径为 0）
+                const isCone = el.type === 'cone';
+                const r = el.radius || 1;
+                obj = makeRoundSolid(pt(isCone ? el.base : el.bottom), pt(isCone ? el.apex : el.top),
+                                     r, isCone ? 0 : r, colorOf(el.color, COLORS.plane), el.opacity);
+            } else if (el.type === 'axes') {
+                obj = new THREE.AxesHelper(el.size || 3);
+            } else if (el.type === 'measure') {
+                // 线段长度标注：中点朝几何体外侧偏移，贴一个 MathJax 长度标签
+                // 注意：CSS2DRenderer 只看 CSS2DObject 自身的 .visible（不看父级），
+                // 所以直接返回定位好的 CSS2DObject，highlight 才能正确开关它。
+                const mid = pt(el.a).add(pt(el.b)).multiplyScalar(0.5);
+                const target = v3(model.target || [0, 0.45, 0]);
+                let dir = mid.clone().sub(target);
+                if (dir.lengthSq() < 1e-6) dir.set(0, 1, 0);
+                dir.normalize().multiplyScalar(el.offset != null ? el.offset : 0.24);
+                const div = document.createElement('div');
+                div.className = 'measure-label';
+                div.innerHTML = '$' + (el.label != null ? el.label : '') + '$';
+                obj = new CSS2DObject(div);
+                obj.position.copy(mid.add(dir));
+            }
+            return obj;
+        }
+
+        // ===== 动点拖拽 + 实时数值 =====
+        const MATH = {}; // name -> 数学坐标数组（draggable 用）
+        function setupDraggable() {
+            const dg = model.draggable;
+            for (const [k, v] of Object.entries(model.mathPoints || {})) MATH[k] = v.slice();
+
+            const moving = new Set([dg.point, ...(dg.dependent || []).map((d) => d.name)]);
+            // 哪些元素引用了移动点 -> 拖拽时重建
+            const refsMoving = (el) => {
+                const names = [el.a, el.b, el.origin, ...(el.pts || [])].filter(Boolean);
+                return names.some((n) => moving.has(n));
+            };
+            const depElements = Object.entries(model.elements || {})
+                .filter(([, el]) => refsMoving(el)).map(([k]) => k);
+
+            const segA = threeFromMath(MATH[dg.along[0]]);
+            const segB = threeFromMath(MATH[dg.along[1]]);
+            const raycaster = new THREE.Raycaster();
+            const pointer = new THREE.Vector2();
+            let dragging = false;
+
+            function setParam(t) {
+                t = Math.max(0, Math.min(1, t));
+                // 数学坐标：动点沿 along 线性插值
+                const a = MATH[dg.along[0]], b = MATH[dg.along[1]];
+                MATH[dg.point] = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]), a[2] + t * (b[2] - a[2])];
+                // 依赖点（目前支持 midpoint）
+                (dg.dependent || []).forEach((d) => {
+                    if (d.kind === 'midpoint') {
+                        const p = MATH[d.of[0]], q = MATH[d.of[1]];
+                        MATH[d.name] = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2];
+                    }
+                });
+                // 更新 three 坐标 + 小球位置
+                moving.forEach((n) => {
+                    POINTS[n] = threeFromMath(MATH[n]);
+                    if (objects[`Point_${n}`]) objects[`Point_${n}`].position.copy(POINTS[n]);
+                });
+                // 重建依赖元素（保留可见性）
+                depElements.forEach((key) => {
+                    const old = objects[key];
+                    const vis = old ? old.visible : false;
+                    if (old) scene.remove(old);
+                    const obj = createElementObj(model.elements[key]);
+                    if (obj) { obj.visible = vis; scene.add(obj); objects[key] = obj; }
+                });
+                updateReadouts(t);
+            }
+
+            function pointerNDC(e) {
+                const r = renderer.domElement.getBoundingClientRect();
+                pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+                pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+            }
+
+            renderer.domElement.addEventListener('pointerdown', (e) => {
+                pointerNDC(e);
+                raycaster.setFromCamera(pointer, camera);
+                const hit = raycaster.intersectObject(objects[`Point_${dg.point}`], true);
+                if (hit.length) {
+                    dragging = true;
+                    controls.enabled = false;
+                    renderer.domElement.style.cursor = 'grabbing';
+                }
+            });
+            window.addEventListener('pointermove', (e) => {
+                if (!dragging) return;
+                pointerNDC(e);
+                raycaster.setFromCamera(pointer, camera);
+                // 射线到约束线段的最近点 -> 求参数 t
+                const closest = new THREE.Vector3();
+                raycaster.ray.distanceSqToSegment(segA, segB, null, closest);
+                const seg = new THREE.Vector3().subVectors(segB, segA);
+                const t = new THREE.Vector3().subVectors(closest, segA).dot(seg) / seg.lengthSq();
+                setParam(t);
+            });
+            window.addEventListener('pointerup', () => {
+                dragging = false;
+                controls.enabled = true;
+                renderer.domElement.style.cursor = '';
+            });
+
+            // 初始：放到题目设定位置
+            setParam(dg.t != null ? dg.t : 0.5);
+            buildReadoutPanel();
+            setParam(dg.t != null ? dg.t : 0.5);
+        }
+
+        // ---- 实时数值（数学坐标下计算真实几何量）----
+        function mv(name) { return MATH[name]; }
+        function vsub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+        function vdot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+        function vcross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+        function vnorm(a) { return Math.sqrt(vdot(a, a)); }
+
+        function computeReadout(r) {
+            if (r.type === 'volume_tetra') {
+                const [P0, P1, P2, P3] = r.pts.map(mv);
+                return Math.abs(vdot(vsub(P1, P0), vcross(vsub(P2, P0), vsub(P3, P0)))) / 6;
+            }
+            if (r.type === 'length') {
+                return vnorm(vsub(mv(r.pts[1]), mv(r.pts[0])));
+            }
+            if (r.type === 'line_plane_angle_sin') {
+                const v = vsub(mv(r.line[1]), mv(r.line[0]));
+                const n = vcross(vsub(mv(r.plane[1]), mv(r.plane[0])), vsub(mv(r.plane[2]), mv(r.plane[0])));
+                return Math.abs(vdot(v, n)) / (vnorm(v) * vnorm(n));
+            }
+            return null;
+        }
+
+        function buildReadoutPanel() {
+            if (!(model.draggable.readouts || []).length) return;
+            if (document.getElementById('readout-panel')) return;
+            const panel = document.createElement('div');
+            panel.id = 'readout-panel';
+            panel.className = 'readout-panel';
+            document.getElementById('canvas-container').appendChild(panel);
+        }
+
+        function updateReadouts(t) {
+            const panel = document.getElementById('readout-panel');
+            if (!panel) return;
+            const dg = model.draggable;
+            const atStd = dg.t != null && Math.abs(t - dg.t) < 0.01;
+            const rows = (dg.readouts || []).map((r) => {
+                const val = computeReadout(r);
+                const num = (val == null) ? '—' : (Math.round(val * 1000) / 1000);
+                return `<div class="readout-row"><span>${r.label}</span><b>${num}</b></div>`;
+            });
+            const hint = (dg.standardLabel || '题目设定位') + (atStd ? ' ✓' : '');
+            panel.innerHTML =
+                `<div class="readout-title">拖动点 ${dg.point} 探索 · ${hint}</div>` + rows.join('');
+        }
+
+        // 长度标注总开关（仅当存在 measure 元素时出现）
+        function buildMeasureToggle() {
+            const elements = model.elements || {};
+            const hasMeasure = Object.values(elements).some((el) => el.type === 'measure');
+            if (!hasMeasure) return;
+            const btn = document.createElement('button');
+            btn.id = 'measure-toggle';
+            btn.type = 'button';
+            const sync = () => {
+                btn.textContent = measuresOn ? ui.measureToggleOn : ui.measureToggleOff;
+                btn.classList.toggle('is-on', measuresOn);
+                btn.setAttribute('aria-pressed', String(measuresOn));
+            };
+            sync();
+            btn.addEventListener('click', () => {
+                measuresOn = !measuresOn;
+                sync();
+                updateSceneState();
+            });
+            document.getElementById('canvas-container').appendChild(btn);
+        }
+
+        function updateUI() {
+            // 更新文本
+            const stepData = steps[currentStep];
+            const fill = (tpl) => tpl
+                .replace('{current}', currentStep + 1)
+                .replace('{total}', steps.length);
+            document.getElementById('step-indicator').textContent = fill(ui.stepTemplate);
+            document.getElementById('camera-indicator').textContent = fill(ui.cameraTemplate);
+
+            // 顶栏进度条：每步一段，已过为墨黑、当前为主色
+            const bars = document.getElementById('progress-bars');
+            if (bars.childElementCount !== steps.length) {
+                bars.innerHTML = steps.map(() => '<i></i>').join('');
+            }
+            Array.from(bars.children).forEach((bar, i) => {
+                bar.className = i === currentStep ? 'is-current' : (i < currentStep ? 'is-done' : '');
+            });
+
+            document.getElementById('scene-label').textContent =
+                `${fill(ui.stepTemplate)} — ${stepData.title}`;
+
+            // 步骤时间线：每步一行，只有当前步展开正文
+            const container = document.getElementById('step-container');
+            container.innerHTML = steps.map((st, i) => {
+                const state = i === currentStep ? 'is-current' : (i < currentStep ? 'is-done' : '');
+                const n = String(i + 1).padStart(2, '0');
+                const body = i === currentStep ? `<div class="step-content">${st.content}</div>` : '';
+                return `<div class="tl-row ${state}">
+                    <div class="tl-rail"><span class="tl-dot"></span><span class="tl-line"></span></div>
+                    <div class="tl-body">
+                        <div class="tl-head"><span class="tl-num">${n}</span><span class="step-title">${st.title}</span></div>
+                        ${body}
+                    </div>
+                </div>`;
+            }).join('');
+            document.getElementById('panel-scroll').scrollTop = 0;
+
+            // 重新渲染 MathJax。题面 h1 在 #sidebar 内，这一次调用就覆盖了它；
+            // 若哪天再把 h1 挪出 sidebar，必须单独为它调用一次，否则 $…$ 会原样显示。
+            typesetMath(document.getElementById('sidebar'));
+            if (!prefersReducedMotion) {
+                container.getAnimations().forEach((animation) => animation.cancel());
+                container.animate([
+                    { opacity: 0, transform: 'translateY(8px)' },
+                    { opacity: 1, transform: 'translateY(0)' }
+                ], {
+                    duration: 280,
+                    easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)'
+                });
+            } else {
+                container.classList.remove('is-changing');
+            }
+
+            // 更新按钮状态
+            document.getElementById('prev-btn').disabled = currentStep === 0;
+            document.getElementById('next-btn').textContent = currentStep === steps.length - 1 ? ui.finish : ui.next;
+            document.getElementById('next-btn').setAttribute(
+                'aria-label',
+                currentStep === steps.length - 1
+                    ? ui.finishAria
+                    : ui.nextAriaTemplate.replace('{step}', currentStep + 2)
+            );
+            document.getElementById('prev-btn').setAttribute(
+                'aria-label',
+                currentStep === 0
+                    ? ui.firstStepAria
+                    : ui.previousAriaTemplate.replace('{step}', currentStep)
+            );
+
+            // 更新 3D 场景状态
+            updateSceneState();
+        }
+
+        function updateSceneState() {
+            const data = steps[currentStep];
+
+            // 1. 先隐藏所有可切换的命名元素
+            const elements = model.elements || {};
+            for (const key of Object.keys(elements)) {
+                if (objects[key]) objects[key].visible = false;
+            }
+
+            // 2. 按当前步骤的 highlight 绝对显示（列出该步需要可见的元素）
+            if (Array.isArray(data.highlight)) {
+                data.highlight.forEach((key) => {
+                    if (!objects[key]) return;
+                    const el = elements[key];
+                    if (el && el.type === 'measure' && !measuresOn) return; // 长度标注总开关：关时不显示
+                    objects[key].visible = true;
+                });
+            }
+
+            // 3. 移动相机 (平滑过渡)
+            if (data.cameraPos) {
+                const targetPos = new THREE.Vector3(data.cameraPos.x, data.cameraPos.y, data.cameraPos.z);
+                if (prefersReducedMotion) {
+                    camera.position.copy(targetPos);
+                    controls.target.copy(cameraTargetPoint);
+                    controls.update();
+                } else {
+                    targetCameraPosition = targetPos;
+                }
+            }
+
+            // 本步新显示的长度标签需排版：先渲染一帧让其 display 生效（MathJax 跳过 display:none），再排版
+            labelRenderer.render(scene, camera);
+            typesetMath(document.getElementById('canvas-container'));
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            labelRenderer.setSize(container.clientWidth, container.clientHeight);
+
+            // 面板宽度变化后，重新评估公式是否需要常驻横向滚动条
+            markScrollableMath(document.getElementById('sidebar'));
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (targetCameraPosition) {
+                camera.position.lerp(targetCameraPosition, 0.07);
+                controls.target.lerp(cameraTargetPoint, 0.07);
+
+                if (camera.position.distanceTo(targetCameraPosition) < 0.015) {
+                    camera.position.copy(targetCameraPosition);
+                    controls.target.copy(cameraTargetPoint);
+                    targetCameraPosition = null;
+                }
+            }
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        // 事件绑定
+        document.getElementById('prev-btn').addEventListener('click', () => {
+            if (currentStep > 0) {
+                goToStep(currentStep - 1);
+            }
+        });
+
+        document.getElementById('next-btn').addEventListener('click', () => {
+            if (currentStep < steps.length - 1) {
+                goToStep(currentStep + 1);
+            }
+        });
+
+        // 启动
+        init();
+    </script>
+</body>
+</html>

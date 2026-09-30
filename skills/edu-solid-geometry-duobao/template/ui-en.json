@@ -1,0 +1,21 @@
+{
+  "skipToSteps": "Skip to solution steps",
+  "sidebarLabel": "Solid geometry solution panel",
+  "answerCardLabel": "Final answer",
+  "answerTitle": "Final Answer",
+  "solutionCardLabel": "Solution steps",
+  "sceneLabel": "Interactive 3D solid geometry model",
+  "interactionTip": "Drag to rotate · Scroll to zoom · Right-drag to pan",
+  "previous": "Previous",
+  "next": "Next",
+  "finish": "Finish",
+  "stepTemplate": "Step {current} / {total}",
+  "finishAria": "Finish the solution",
+  "nextAriaTemplate": "Go to step {step}",
+  "previousAriaTemplate": "Back to step {step}",
+  "firstStepAria": "Already at the first step",
+  "measureToggleOn": "Lengths: on",
+  "measureToggleOff": "Lengths: off",
+  "cameraTemplate": "Camera {current} / {total}",
+  "gridUnit": "1 grid square = 1 unit"
+}
